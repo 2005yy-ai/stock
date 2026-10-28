@@ -174,17 +174,17 @@ if st.button("🚀 生成一键诊断报告", type="primary"):
         try:
             # 使用官方 client 调用
             client = genai.Client(api_key=api_key.strip())
-            response = client.models.generate_content_stream(
-                model=model_name,
-                contents=prompt
-            )
+response = client.models.generate_content_stream(
+    model=model_name,
+    contents=prompt
+)
 
-            report_placeholder = st.empty()
-            full_text = ""
-            for chunk in response:
-                if chunk.text:
-                  full_text += chunk.text
-                  report_placeholder.markdown(full_text)
-            st.success("诊断生成完毕！")
+report_placeholder = st.empty()
+full_text = ""
+for chunk in response:
+    if chunk.text:
+        full_text += chunk.text
+        report_placeholder.markdown(full_text)
+st.success("诊断生成完毕！")
         except Exception as e:
             st.error(f"调用 AI 接口出错: {e}")
