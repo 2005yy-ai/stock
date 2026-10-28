@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from google import genai
 import os
+import time
 
 # --- 页面基本配置 ---
 st.set_page_config(
@@ -26,7 +27,7 @@ def calculate_indicators(df):
     df['RSI'] = 100 - (100 / (1 + rs))
     return df
 
-# --- 侧边栏：参数与免费模型配置 ---
+# --- 侧边栏：参数与模型配置 ---
 st.sidebar.header("⚙️ 参数配置")
 
 ticker_input = st.sidebar.text_input("股票代码 (Ticker)", value="NVDA").upper().strip()
@@ -35,10 +36,10 @@ interval = st.sidebar.selectbox("K线级别", ["1d", "1wk"], index=0)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🤖 AI 模型配置 (Google 官方免费版)")
-api_key = st.sidebar.text_input("Gemini API Key (AIzaSy...)", type="password", value=os.getenv("GEMINI_API_KEY", ""))
+api_key = st.sidebar.text_input("Gemini API Key", type="password", value=os.getenv("GEMINI_API_KEY", ""))
 model_name = st.sidebar.selectbox(
     "模型选择", 
-    ["gemini-3.8-flash", "gemini-3.8-pro"], 
+    ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"], 
     index=0
 )
 
@@ -134,15 +135,14 @@ st.subheader("🧠 AI 投资与技术面综合研报")
 
 if st.button("🚀 生成一键诊断报告", type="primary"):
     if not api_key:
-        st.warning("请在左侧边栏输入申请的 Gemini API Key (AIzaSy...) 后再运行诊断。")
+        st.warning("请在左侧边栏输入申请的 Gemini API Key 后再运行诊断。")
         st.stop()
 
-    with st.spinner("Gemini 正在深度解析量价动能、财务基本面与市场情绪..."):
-        recent_vol_avg = df['Volume'].iloc[-6:-1].mean()
-        latest_vol = df['Volume'].iloc[-1]
-        vol_surge = latest_vol / recent_vol_avg if recent_vol_avg > 0 else 1.0
+    recent_vol_avg = df['Volume'].iloc[-6:-1].mean()
+    latest_vol = df['Volume'].iloc[-1]
+    vol_surge = latest_vol / recent_vol_avg if recent_vol_avg > 0 else 1.0
 
-        prompt = f"""
+    prompt = f"""
 你是一名严谨的股票量化与基本面分析专家。请根据以下客观数据对代码【{ticker_input}】进行深度研判。
 
 【行情与技术面指标】
@@ -171,20 +171,28 @@ if st.button("🚀 生成一键诊断报告", type="primary"):
 4. **操作策略与风控提示**：明确给出短期阻力位、支撑位及严格的止损参考建议。
 """
 
-        try:
-            # 使用官方 client 调用
-            client = genai.Client(api_key=api_key.strip())
-response = client.models.generate_content_stream(
-    model=model_name,
-    contents=prompt
-)
+    client = genai.Client(api_key=api_key.strip())
+    report_placeholder = st.empty()
+    full_text = ""
+    max_retries = 3
 
-report_placeholder = st.empty()
-full_text = ""
-for chunk in response:
-    if chunk.text:
-        full_text += chunk.text
-        report_placeholder.markdown(full_text)
-st.success("诊断生成完毕！")
+    for attempt in range(max_retries):
+        try:
+            with st.spinner("Gemini 正在深度解析量价动能与财务基本面..."):
+                response = client.models.generate_content_stream(
+                    model=model_name,
+                    contents=prompt
+                )
+                for chunk in response:
+                    if chunk.text:
+                        full_text += chunk.text
+                        report_placeholder.markdown(full_text)
+            st.success("诊断生成完毕！")
+            break
         except Exception as e:
-            st.error(f"调用 AI 接口出错: {e}")
+            if "503" in str(e) and attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            else:
+                st.error(f"调用 AI 接口出错: {e}")
+                break
