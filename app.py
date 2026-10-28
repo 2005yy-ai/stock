@@ -39,7 +39,7 @@ st.sidebar.subheader("🤖 AI 模型配置 (Google 官方免费版)")
 api_key = st.sidebar.text_input("Gemini API Key", type="password", value=os.getenv("GEMINI_API_KEY", ""))
 model_name = st.sidebar.selectbox(
     "模型选择", 
-    ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"], 
+    ["gemini-3.8-flash", "gemini-3.8-pro"], 
     index=0
 )
 
