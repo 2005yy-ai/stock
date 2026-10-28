@@ -2,7 +2,6 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import pandas_ta as ta
 import openai
 import os
 
@@ -12,6 +11,22 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
+
+# --- 辅助指标计算函数（免额外库，原生计算） ---
+def calculate_indicators(df):
+    # 20日与50日移动平均线
+    df['MA20'] = df['Close'].rolling(window=20).mean()
+    df['MA50'] = df['Close'].rolling(window=50).mean()
+    
+    # 14日 RSI 强弱指标
+    delta = df['Close'].diff()
+    gain = delta.clip(lower=0)
+    loss = -1 * delta.clip(upper=0)
+    avg_gain = gain.rolling(window=14, min_periods=14).mean()
+    avg_loss = loss.rolling(window=14, min_periods=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    return df
 
 # --- 侧边栏：参数与免费模型配置 ---
 st.sidebar.header("⚙️ 参数配置")
@@ -30,8 +45,7 @@ model_name = st.sidebar.selectbox(
     index=0
 )
 
-# 录入小道消息/舆情
-user_rumors = st.sidebar.text_area("补充小道消息 / 市场舆情 (选填)", placeholder="例如：论坛传闻大客户推迟订单；某机构近期持续建仓等...")
+user_rumors = st.sidebar.text_area("补充小道消息 / 市场舆情 (选填)", placeholder="例如：论坛传闻大客户推迟订单；机构资金近期大幅流入等...")
 
 # --- 数据获取函数 ---
 @st.cache_data(ttl=300)
@@ -40,11 +54,7 @@ def load_stock_data(ticker: str, period: str, interval: str):
     df = stock.history(period=period, interval=interval)
     if df.empty:
         return None, None
-    
-    df['MA20'] = ta.sma(df['Close'], length=20)
-    df['MA50'] = ta.sma(df['Close'], length=50)
-    df['RSI'] = ta.rsi(df['Close'], length=14)
-    
+    df = calculate_indicators(df)
     return df, stock.info
 
 # --- 页面主区域 ---
@@ -138,7 +148,7 @@ if st.button("🚀 生成一键诊断报告", type="primary"):
         client = openai.OpenAI(api_key=api_key, base_url=base_url.strip())
 
         prompt = f"""
-你是一名严谨的股票量化与基本面分析专家。请根据以下提供的客观数据对代码【{ticker_input}】进行深度研判。
+你是一名严谨的股票量化与基本面分析专家。请根据以下客观数据对代码【{ticker_input}】进行深度研判。
 
 【行情与技术面指标】
 - 最新收盘价: {latest_close:.2f}
@@ -159,10 +169,10 @@ if st.button("🚀 生成一键诊断报告", type="primary"):
 【输入的小道消息与舆情摘要】
 {user_rumors if user_rumors.strip() else "暂无用户输入的额外舆情。"}
 
-请输出一份排版清晰的研报，包含以下结构：
+请输出一份排版清晰的研报：
 1. **量价与技术面研判**：结合 RSI 与均线支撑阻力，判断目前多空动能及放量/缩量状态。
 2. **财务与估值评价**：结合行业常态评估估值合理性与财务健康度。
-3. **消息面与情绪分析**：若提供了小道消息，客观剖析传闻真实性风险及其对散户情绪的潜在冲击（若无则简评市场共识）。
+3. **消息面与情绪分析**：若提供了小道消息，客观剖析传闻真实性风险及其对情绪的潜在冲击（若无则简评市场共识）。
 4. **操作策略与风控提示**：明确给出短期阻力位、支撑位及严格的止损参考建议。
 """
 
