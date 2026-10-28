@@ -41,7 +41,7 @@ api_key = st.sidebar.text_input("Groq API Key (gsk_...)", type="password", value
 base_url = st.sidebar.text_input("API Base URL", value="https://api.groq.com/openai/v1")
 model_name = st.sidebar.selectbox(
     "模型选择", 
-    ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "deepseek-r1-distill-llama-70b"], 
+    ["llama-3.1-8b-instant", "llama-3.1-70b-versatile", "gemma2-9b-it"], 
     index=0
 )
 
