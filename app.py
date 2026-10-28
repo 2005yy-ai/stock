@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import openai
+from google import genai
 import os
 
 # --- 页面基本配置 ---
@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 辅助指标计算函数（免第三方重型库） ---
+# --- 辅助指标计算函数 ---
 def calculate_indicators(df):
     df['MA20'] = df['Close'].rolling(window=20).mean()
     df['MA50'] = df['Close'].rolling(window=50).mean()
@@ -34,12 +34,11 @@ time_period = st.sidebar.selectbox("历史周期", ["1mo", "3mo", "6mo", "1y", "
 interval = st.sidebar.selectbox("K线级别", ["1d", "1wk"], index=0)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🤖 AI 模型配置 (免费 Gemini)")
+st.sidebar.subheader("🤖 AI 模型配置 (Google 官方免费版)")
 api_key = st.sidebar.text_input("Gemini API Key (AIzaSy...)", type="password", value=os.getenv("GEMINI_API_KEY", ""))
-base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
 model_name = st.sidebar.selectbox(
     "模型选择", 
-    ["gemini-1.5-flash", "gemini-1.5-pro"], 
+    ["gemini-2.5-flash", "gemini-1.5-flash"], 
     index=0
 )
 
@@ -143,12 +142,6 @@ if st.button("🚀 生成一键诊断报告", type="primary"):
         latest_vol = df['Volume'].iloc[-1]
         vol_surge = latest_vol / recent_vol_avg if recent_vol_avg > 0 else 1.0
 
-        # 直接使用 Google 官方提供的 OpenAI 兼容接口
-        client = openai.OpenAI(
-            api_key=api_key.strip(),
-            base_url=base_url
-        )
-
         prompt = f"""
 你是一名严谨的股票量化与基本面分析专家。请根据以下客观数据对代码【{ticker_input}】进行深度研判。
 
@@ -179,12 +172,13 @@ if st.button("🚀 生成一键诊断报告", type="primary"):
 """
 
         try:
-            response = client.chat.completions.create(
+            # 使用官方 client 调用
+            client = genai.Client(api_key=api_key.strip())
+            response = client.models.generate_content(
                 model=model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3
+                contents=prompt
             )
             st.success("诊断生成完毕！")
-            st.markdown(response.choices[0].message.content)
+            st.markdown(response.text)
         except Exception as e:
             st.error(f"调用 AI 接口出错: {e}")
